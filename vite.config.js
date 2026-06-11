@@ -4,7 +4,7 @@ import path from 'node:path'
 
 // IMPORTANT: change this to your repo name for GitHub Pages.
 // Use '/' for a user/organization site (username.github.io) or for local-only use.
-export const REPO_BASE = '/image-optimizer/'
+export const REPO_BASE = '/media-optimizer/'
 
 export default defineConfig({
   base: REPO_BASE,
