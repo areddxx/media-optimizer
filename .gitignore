@@ -3,3 +3,11 @@ dist
 .DS_Store
 .vite
 *.log
+
+# Generated at install time by scripts/copy-ffmpeg.mjs
+public/ffmpeg-st/
+public/ffmpeg-mt/
+public/coi-serviceworker.min.js
+
+# Local test files
+samples/

@@ -4,7 +4,25 @@
       "Bash(npm install *)",
       "Bash(command -v nvm)",
       "Bash(command -v fnm)",
-      "Bash(command -v volta)"
+      "Bash(command -v volta)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(cp /Users/areddxx/sites/image-optimizer/node_modules/@ffmpeg/core/dist/umd/* /Users/areddxx/sites/image-optimizer/public/ffmpeg-st/)",
+      "Bash(cp /Users/areddxx/sites/image-optimizer/node_modules/@ffmpeg/core-mt/dist/umd/* /Users/areddxx/sites/image-optimizer/public/ffmpeg-mt/)",
+      "Bash(mkdir -p /Users/areddxx/sites/image-optimizer/samples)",
+      "Bash(ffmpeg -y -f lavfi -i \"gradients=s=3000x2000:c0=0x202040:c1=0xff7755:c2=0x5588ff:n=4:duration=1,format=rgb24\" -frames:v 1 -update 1 sample-large.png)",
+      "Bash(ffmpeg -y -f lavfi -i \"mandelbrot=s=4000x3000:rate=1\" -frames:v 1 -q:v 2 sample-photo.jpg)",
+      "Bash(ffmpeg -y -f lavfi -i \"testsrc2=s=1920x1080:rate=1\" -frames:v 1 sample.webp)",
+      "Bash(ffmpeg -y -f lavfi -i \"testsrc=s=320x240:rate=12:duration=3\" -loop 0 sample-animated.gif)",
+      "Bash(ffmpeg -y -f lavfi -i \"nullsrc=s=3000x2000,geq=r='random\\(1\\)*255':g='random\\(1\\)*255':b='random\\(1\\)*255'\" -frames:v 1 -update 1 sample-large.png)",
+      "Bash(ffmpeg -y -f lavfi -i \"testsrc2=s=1920x1080:rate=30:duration=10\" -f lavfi -i \"sine=frequency=440:duration=10\" -c:v libx264 -pix_fmt yuv420p -preset fast -crf 18 -c:a aac -b:a 192k sample-video.mp4)",
+      "Bash(ffmpeg -y -f lavfi -i \"sine=frequency=440:duration=10\" -ar 44100 -b:a 320k sample-audio.mp3)",
+      "Bash(ffmpeg -y -f lavfi -i \"anoisesrc=duration=10:color=brown:amplitude=0.3\" -ar 48000 sample-audio.wav)",
+      "Bash(ffmpeg -y -i sample-photo.jpg -c:v libx265 -tag:v hvc1 -pix_fmt yuv420p -frames:v 1 sample.heic)",
+      "Bash(sips -s format heic sample-photo.jpg --out sample.heic)",
+      "Bash(open *)",
+      "Bash(pkill -f vite)",
+      "Bash(awk NR==8 {print substr\\($0, 1, 200\\)} *)",
+      "Bash(awk *)"
     ]
   }
 }
