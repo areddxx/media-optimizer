@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { optimizeImage, IMAGE_TYPES, supportsAvifEncode } from './lib/image.js'
+import { optimizeImage, IMAGE_TYPES, supportsAvifEncode, decodeHeic, isHeic } from './lib/image.js'
 import { optimizePdf } from './lib/pdf.js'
 import { optimizeVideo, VIDEO_TYPES, videoEngineInfo, preloadVideoEngine, onEngineLoad } from './lib/video.js'
 import { optimizeAudio, AUDIO_TYPES, AUDIO_EXTS } from './lib/audio.js'
@@ -125,19 +125,11 @@ function ImagePreviewModal({ open, onClose, item }) {
     let cancelled = false
     let u1, u2
     ;(async () => {
-      const isHeicFile =
-        /\.hei[cf]$/i.test(item.name) || item.file.type === 'image/heic' || item.file.type === 'image/heif'
       let origBlob = item.file
-      if (isHeicFile) {
+      if (isHeic(item.file)) {
         setOrigLoading(true)
         try {
-          const mod = await import('heic2any')
-          const fn =
-            (typeof mod === 'function' && mod) ||
-            (typeof mod?.default === 'function' && mod.default) ||
-            window.heic2any
-          const decoded = await fn({ blob: item.file, toType: 'image/jpeg', quality: 0.95 })
-          origBlob = Array.isArray(decoded) ? decoded[0] : decoded
+          origBlob = await decodeHeic(item.file)
         } catch {/* fall through with raw file */}
         if (cancelled) return
         setOrigLoading(false)

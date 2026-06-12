@@ -19,20 +19,31 @@ export function supportsAvifEncode() {
   return avifSupportPromise
 }
 
-const isHeic = (file) =>
+export const isHeic = (file) =>
   /\.hei[cf]$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif'
 
-async function decodeHeic(file) {
-  const mod = await import('heic2any')
-  // heic2any@0.0.4 ships as a side-effect bundle that attaches to window.heic2any —
-  // no real module export. Fall back to the global if the import shape is empty.
-  const fn =
-    (typeof mod === 'function' && mod) ||
-    (typeof mod?.default === 'function' && mod.default) ||
-    (typeof window !== 'undefined' && window.heic2any)
-  if (typeof fn !== 'function') throw new Error('heic2any failed to load')
-  const out = await fn({ blob: file, toType: 'image/jpeg', quality: 0.95 })
-  return Array.isArray(out) ? out[0] : out
+async function bitmapToJpeg(bmp, quality = 0.95) {
+  const canvas = document.createElement('canvas')
+  canvas.width = bmp.width
+  canvas.height = bmp.height
+  canvas.getContext('2d').drawImage(bmp, 0, 0)
+  if (bmp.close) bmp.close()
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('encode failed'))), 'image/jpeg', quality)
+  })
+}
+
+// Native first (Safari decodes HEIC), then heic-to (newer libheif build).
+// heic2any was removed because its bundled libheif rejects newer iPhone HEIC
+// variants with ERR_LIBHEIF format_not_supported.
+export async function decodeHeic(file) {
+  try {
+    const bmp = await createImageBitmap(file)
+    return await bitmapToJpeg(bmp)
+  } catch {/* fall through to wasm decoder */}
+
+  const { heicTo } = await import('heic-to')
+  return heicTo({ blob: file, type: 'image/jpeg', quality: 0.95 })
 }
 
 async function loadBitmap(blob) {
