@@ -66,14 +66,25 @@ function encode(canvas, format, quality) {
   })
 }
 
-export async function optimizeImage(file, { format, quality, maxDim, targetBytes, onProgress }) {
+export async function optimizeImage(file, { format, quality, maxDim, targetBytes, crop, onProgress }) {
   onProgress?.(0.05)
   const source = isHeic(file) ? await decodeHeic(file) : file
 
   onProgress?.(0.15)
   const bmp = await loadBitmap(source)
-  let { width, height } = bmp.width != null ? bmp : { width: bmp.naturalWidth, height: bmp.naturalHeight }
+  const natW = bmp.width != null ? bmp.width : bmp.naturalWidth
+  const natH = bmp.width != null ? bmp.height : bmp.naturalHeight
 
+  let sx = 0, sy = 0, sw = natW, sh = natH
+  if (crop && crop.w > 0 && crop.h > 0) {
+    sx = Math.max(0, Math.round(crop.x))
+    sy = Math.max(0, Math.round(crop.y))
+    sw = Math.min(natW - sx, Math.round(crop.w))
+    sh = Math.min(natH - sy, Math.round(crop.h))
+  }
+
+  let width = sw
+  let height = sh
   if (maxDim && (width > maxDim || height > maxDim)) {
     const scale = Math.min(maxDim / width, maxDim / height)
     width = Math.round(width * scale)
@@ -84,7 +95,7 @@ export async function optimizeImage(file, { format, quality, maxDim, targetBytes
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
-  ctx.drawImage(bmp, 0, 0, width, height)
+  ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, width, height)
   if (bmp.close) bmp.close()
 
   onProgress?.(0.35)

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { zipSync } from 'fflate'
 import {
   ImageDown, Upload, FileImage, FileText, FileVideo, FileAudio,
-  Download, X, Play, Trash2, Archive, Eye, GripVertical, Palette,
+  Download, X, Play, Trash2, Archive, Eye, GripVertical, Palette, Crop,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -115,6 +115,173 @@ function ThemeSelector() {
   )
 }
 
+function CropModal({ open, onClose, item, onApply }) {
+  const [url, setUrl] = useState(null)
+  const [natural, setNatural] = useState(null) // { w, h }
+  const [loading, setLoading] = useState(false)
+  const [displaySize, setDisplaySize] = useState({ w: 0, h: 0 })
+  const [rect, setRect] = useState(null) // in natural pixel coords {x,y,w,h}
+  const [drawing, setDrawing] = useState(null) // {startX,startY} in display coords
+  const imgRef = useRef(null)
+  const stageRef = useRef(null)
+
+  useEffect(() => {
+    if (!open || !item) return
+    let cancelled = false
+    let objectUrl
+    setRect(item.cropRect || null)
+    setDrawing(null)
+    ;(async () => {
+      let blob = item.file
+      if (isHeic(item.file)) {
+        setLoading(true)
+        try { blob = await decodeHeic(item.file) } catch {/* keep raw */}
+        if (cancelled) return
+        setLoading(false)
+      }
+      objectUrl = URL.createObjectURL(blob)
+      if (cancelled) { URL.revokeObjectURL(objectUrl); return }
+      setUrl(objectUrl)
+    })()
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setUrl(null); setNatural(null); setDisplaySize({ w: 0, h: 0 })
+    }
+  }, [open, item])
+
+  const onImgLoad = () => {
+    const img = imgRef.current
+    if (!img) return
+    setNatural({ w: img.naturalWidth, h: img.naturalHeight })
+    setDisplaySize({ w: img.clientWidth, h: img.clientHeight })
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const onResize = () => {
+      const img = imgRef.current
+      if (img) setDisplaySize({ w: img.clientWidth, h: img.clientHeight })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [open])
+
+  const scale = natural && displaySize.w ? displaySize.w / natural.w : 1
+
+  const toNatural = (px, py) => ({
+    x: Math.max(0, Math.min(natural.w, px / scale)),
+    y: Math.max(0, Math.min(natural.h, py / scale)),
+  })
+
+  const handleDown = (e) => {
+    if (!natural || !stageRef.current) return
+    const r = stageRef.current.getBoundingClientRect()
+    const x = e.clientX - r.left
+    const y = e.clientY - r.top
+    setDrawing({ startX: x, startY: y })
+    const n = toNatural(x, y)
+    setRect({ x: n.x, y: n.y, w: 0, h: 0 })
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+  const handleMove = (e) => {
+    if (!drawing || !natural || !stageRef.current) return
+    const r = stageRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(displaySize.w, e.clientX - r.left))
+    const y = Math.max(0, Math.min(displaySize.h, e.clientY - r.top))
+    const a = toNatural(Math.min(drawing.startX, x), Math.min(drawing.startY, y))
+    const b = toNatural(Math.max(drawing.startX, x), Math.max(drawing.startY, y))
+    setRect({ x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y })
+  }
+  const handleUp = () => setDrawing(null)
+
+  const apply = () => {
+    if (!rect || rect.w < 2 || rect.h < 2) { onApply(null); onClose(); return }
+    onApply({
+      x: Math.round(rect.x), y: Math.round(rect.y),
+      w: Math.round(rect.w), h: Math.round(rect.h),
+    })
+    onClose()
+  }
+  const reset = () => setRect(null)
+
+  if (!open || !item) return null
+  const dispRect = rect && scale ? {
+    left: rect.x * scale,
+    top: rect.y * scale,
+    width: rect.w * scale,
+    height: rect.h * scale,
+  } : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-card border rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b px-5 py-3">
+          <div>
+            <div className="text-sm font-semibold truncate">Crop · {item.name}</div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {natural ? `${natural.w} × ${natural.h}` : '—'}
+              {rect && rect.w >= 1 && rect.h >= 1 && (
+                <span className="ml-2">→ {Math.round(rect.w)} × {Math.round(rect.h)}</span>
+              )}
+            </div>
+          </div>
+          <Button size="icon" variant="ghost" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </div>
+        <div className="p-5">
+          <div className="rounded-md border bg-muted/30 overflow-hidden flex items-center justify-center min-h-[200px]">
+            {loading ? (
+              <div className="text-xs text-muted-foreground p-6">Decoding HEIC…</div>
+            ) : url ? (
+              <div
+                ref={stageRef}
+                className="relative inline-block select-none touch-none cursor-crosshair"
+                style={{ maxWidth: '100%', maxHeight: '70vh' }}
+                onPointerDown={handleDown}
+                onPointerMove={handleMove}
+                onPointerUp={handleUp}
+                onPointerCancel={handleUp}
+              >
+                <img
+                  ref={imgRef}
+                  src={url}
+                  alt="crop"
+                  onLoad={onImgLoad}
+                  draggable={false}
+                  className="block max-w-full max-h-[70vh] w-auto h-auto pointer-events-none"
+                />
+                {dispRect && (
+                  <>
+                    <div className="absolute inset-0 pointer-events-none" style={{
+                      boxShadow: `0 0 0 9999px rgba(0,0,0,0.5)`,
+                      clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 ${dispRect.top}px, ${dispRect.left}px ${dispRect.top}px, ${dispRect.left}px ${dispRect.top + dispRect.height}px, ${dispRect.left + dispRect.width}px ${dispRect.top + dispRect.height}px, ${dispRect.left + dispRect.width}px ${dispRect.top}px, 0 ${dispRect.top}px)`,
+                    }} />
+                    <div
+                      className="absolute border-2 border-primary pointer-events-none"
+                      style={{
+                        left: dispRect.left, top: dispRect.top,
+                        width: dispRect.width, height: dispRect.height,
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Click and drag on the image to draw the crop region. Leave empty to clear.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
+          <Button variant="ghost" onClick={reset} disabled={!rect}>Reset</Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={apply}>Apply crop</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ImagePreviewModal({ open, onClose, item }) {
   const [origUrl, setOrigUrl] = useState(null)
   const [outUrl, setOutUrl] = useState(null)
@@ -216,6 +383,7 @@ export default function App() {
   const [engine, setEngine] = useState(() => ({ phase: 'idle', loaded: 0, total: 0, mt: false }))
   const [avifOk, setAvifOk] = useState(false)
   const [previewItem, setPreviewItem] = useState(null)
+  const [cropItem, setCropItem] = useState(null)
   const [dragId, setDragId] = useState(null)
   const inputRef = useRef(null)
 
@@ -239,6 +407,7 @@ export default function App() {
       outSize: null,
       outName: null,
       error: null,
+      cropRect: null,
     }))
     setItems((p) => [...p, ...next])
     if (next.some((it) => it.kind === 'video' || it.kind === 'audio')) preloadVideoEngine().catch(() => {})
@@ -268,6 +437,7 @@ export default function App() {
           quality: Number(imgQuality),
           maxDim: imgMaxDim ? Number(imgMaxDim) : null,
           targetBytes: imgTargetMode && imgTargetKb ? Number(imgTargetKb) * 1024 : null,
+          crop: it.cropRect,
           onProgress,
         })
       } else if (it.kind === 'pdf') {
@@ -685,6 +855,7 @@ export default function App() {
                 : it.kind === 'audio' ? FileAudio
                 : FileImage
               const canPreview = it.kind === 'image' && it.status === 'done'
+              const canCrop = it.kind === 'image' && it.status !== 'processing'
               return (
                 <Card
                   key={it.id}
@@ -728,6 +899,17 @@ export default function App() {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {canCrop && (
+                        <Button
+                          size="icon"
+                          variant={it.cropRect ? 'secondary' : 'ghost'}
+                          onClick={() => setCropItem(it)}
+                          aria-label="Crop"
+                          title={it.cropRect ? `Crop: ${it.cropRect.w}×${it.cropRect.h}` : 'Crop'}
+                        >
+                          <Crop className="h-4 w-4" />
+                        </Button>
+                      )}
                       {canPreview && (
                         <Button size="icon" variant="ghost" onClick={() => setPreviewItem(it)} aria-label="Preview">
                           <Eye className="h-4 w-4" />
@@ -769,6 +951,23 @@ export default function App() {
       </footer>
 
       <ImagePreviewModal open={!!previewItem} item={previewItem} onClose={() => setPreviewItem(null)} />
+      <CropModal
+        open={!!cropItem}
+        item={cropItem}
+        onClose={() => setCropItem(null)}
+        onApply={(rect) => {
+          if (!cropItem) return
+          update(cropItem.id, {
+            cropRect: rect,
+            status: 'queued',
+            outBlob: null,
+            outSize: null,
+            outName: null,
+            progress: 0,
+            error: null,
+          })
+        }}
+      />
     </div>
   )
 }
